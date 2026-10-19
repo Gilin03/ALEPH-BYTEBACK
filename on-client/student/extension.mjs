@@ -123,7 +123,66 @@ export function createStudentView() {
 
       return root;
     },
-    renderDecision() { return '학생 구현 대기: 서버의 판정과 이유를 연결하세요.'; },
+    renderDecision({ status, mode, data, error, appId } = {}) {
+      const root = document.createElement('section');
+      const heading = document.createElement('h3');
+      heading.textContent = '업무 앱 접근 판정';
+      root.append(heading);
+
+      const addLine = (tag, text) => {
+        const node = document.createElement(tag);
+        node.textContent = text;
+        root.append(node);
+      };
+      const targetAppId = data?.appId ?? appId;
+      if (targetAppId != null && targetAppId !== '') {
+        addLine('p', `업무 앱 ID: ${targetAppId}`);
+      }
+
+      if (status === 'idle') {
+        addLine('p', '업무 앱을 선택해 접근을 요청하세요.');
+      } else if (status === 'loading') {
+        addLine('p', '판정 확인 중');
+      } else if (status === 'error') {
+        const detail = typeof error?.message === 'string' && error.message.length > 0
+          ? error.message
+          : '오류 내용을 확인할 수 없습니다.';
+        addLine('p', `요청 실패: ${detail}`);
+        addLine('p', '요청 실패는 접근 거부 판정이 아닙니다.');
+      } else if (status === 'ok') {
+        const decisionLabels = {
+          allow: '허용',
+          deny: '거부',
+          challenge: '추가 확인 필요',
+          unknown: '확인 불가',
+        };
+        const rawDecision = typeof data?.decision === 'string' && data.decision.length > 0
+          ? data.decision
+          : 'unknown';
+        const isKnownDecision = Object.hasOwn(decisionLabels, rawDecision);
+        const label = isKnownDecision ? decisionLabels[rawDecision] : '확인 불가';
+        addLine('p', `판정: ${label}(${rawDecision})`);
+
+        if (rawDecision === 'allow') {
+          addLine('p', '정책상 접근 허용이며 실제 앱 접속 성공을 보장하지 않습니다.');
+        } else if (rawDecision === 'challenge') {
+          addLine('p', '이 앱이 추가 인증이나 확인 절차를 대신 수행하지 않습니다.');
+        }
+
+        const reason = typeof data?.reason === 'string' && data.reason.length > 0
+          ? data.reason
+          : '사유 정보 없음';
+        const checkedAt = typeof data?.checkedAt === 'string' && data.checkedAt.length > 0
+          ? data.checkedAt
+          : '확인 불가';
+        addLine('p', `판정 이유: ${reason}`);
+        addLine('p', `판정 시각: ${checkedAt}`);
+      } else {
+        addLine('p', '확인 불가: 응답 상태를 확인할 수 없습니다.');
+      }
+
+      return root;
+    },
     renderEvents() { return '학생 구현 대기: 본인 접속·XDR 기록을 연결하세요.'; },
     renderStatus() { return '학생 구현 대기: 기기·세션·알림과 연결 점검 상태를 구분하세요.'; },
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·OSV 출처·조회 시각·부분 결과·조회 실패를 구분하세요.'; },
