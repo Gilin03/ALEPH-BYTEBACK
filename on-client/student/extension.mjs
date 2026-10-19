@@ -159,9 +159,11 @@ export function createStudentView() {
         const rawDecision = typeof data?.decision === 'string' && data.decision.length > 0
           ? data.decision
           : 'unknown';
-        const isKnownDecision = Object.hasOwn(decisionLabels, rawDecision);
-        const label = isKnownDecision ? decisionLabels[rawDecision] : '확인 불가';
-        addLine('p', `판정: ${label}(${rawDecision})`);
+        const displayDecision = Object.hasOwn(decisionLabels, rawDecision)
+          ? rawDecision
+          : 'unknown';
+        const label = decisionLabels[displayDecision];
+        addLine('p', `판정: ${label}(${displayDecision})`);
 
         if (rawDecision === 'allow') {
           addLine('p', '정책상 접근 허용이며 실제 앱 접속 성공을 보장하지 않습니다.');
