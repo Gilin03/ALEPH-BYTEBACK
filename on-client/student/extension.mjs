@@ -568,8 +568,128 @@ export function createStudentView() {
       return root;
     },
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·OSV 출처·조회 시각·부분 결과·조회 실패를 구분하세요.'; },
-    renderAiConnection() { return '학생 구현 대기: 모델 응답 점검과 실제 사건 설명을 구분하고 AI 오류·취소·수동 복구를 안내하세요.'; },
-    renderExplanation() { return '학생 구현 대기: 선택한 사건의 근거·규칙·현재 상태와 AI 설명을 연결하세요. 제안은 자동 실행하지 않습니다.'; },
+    renderAiConnection({ status, mode, data, error, checkedAt } = {}) {
+      const root = document.createElement('section');
+      root.setAttribute('aria-label', 'AI 연결 점검 결과');
+      const addLine = (tag, text, role) => {
+        const node = document.createElement(tag);
+        node.textContent = text;
+        if (role) node.setAttribute('role', role);
+        root.append(node);
+        return node;
+      };
+      const modes = {
+        connected: '연결됨',
+        demo: '예제 응답(demo) · 실제 연결 아님',
+        disconnected: '연결 없음',
+        unknown: '확인 불가',
+      };
+      const heading = document.createElement('h3');
+      heading.textContent = 'AI 연결 점검';
+      root.append(heading);
+      addLine('p', `데이터 모드: ${modes[mode] || '확인 불가'}`);
+
+      if (status === 'idle') {
+        addLine('p', 'AI 연결 점검 전입니다. 자동 점검은 실행하지 않습니다.');
+      } else if (status === 'loading') {
+        addLine('p', 'AI 연결 점검 중입니다.', 'status');
+      } else if (status === 'ok') {
+        const authorization = data?.audienceAuthorization;
+        const authorizationLabels = {
+          test: '시험 연결 점검(test)',
+          verified: '앱 권한 확인 후 점검(verified)',
+        };
+        if (data?.transportChecked !== true || !Object.hasOwn(authorizationLabels, authorization)
+          || !Number.isInteger(data.modelCount) || data.modelCount < 0 || data.modelCount > 10000
+          || typeof checkedAt !== 'string' || checkedAt.length === 0) {
+          addLine('p', '확인 불가: 연결 점검 응답이 입력 계약을 충족하지 않습니다.', 'status');
+        } else {
+          addLine('p', authorizationLabels[authorization]);
+          addLine('p', `응답 모델 수: ${data.modelCount}`);
+          addLine('p', `점검 시각: ${checkedAt}`);
+          addLine('p', 'AI 연결만 점검했습니다. 사건 설명은 아직 실행하지 않았습니다.');
+        }
+      } else if (status === 'error') {
+        const recovery = {
+          ON_AI_PROVISIONING_PENDING: '권한 준비 중입니다. 담당자에게 계정 연결과 앱 권한 확인을 요청하세요.',
+          ON_AI_AUTHORIZATION_CHANGED: '점검 중 권한이 변경됐습니다. 담당자에게 현재 계정 권한을 확인하세요.',
+          SUBJECT_SCOPE_UNVERIFIED: '현재 계정의 앱 권한을 확인할 수 없습니다. 담당자에게 계정 연결을 확인하세요.',
+          WB_CLCO_AUTH_REQUIRED: '인증이 필요합니다. 계정 연결을 다시 확인하고 담당자에게 확인을 요청하세요.',
+          WB_CLCO_ACCESS_BLOCKED: '앱 접근이 제한됐습니다. 담당자에게 계정과 앱 권한을 확인하세요.',
+          WB_CLCO_COHORT_BUDGET_EXHAUSTED: '수업 사용량이 소진됐습니다. 담당자에게 확인하세요.',
+          WB_CLCO_LIMIT_REACHED: '이용 한도에 도달했습니다. 담당자에게 확인하세요.',
+          WB_CLCO_SESSION_CLOSED: '현재 이용 시간이 아닙니다. 정해진 이용 시간을 확인하세요.',
+          WB_CLCO_RATE_LIMITED: '요청이 제한됐습니다. 잠시 뒤 직접 다시 점검하세요.',
+          WB_CLCO_TIMEOUT: '요청 시간이 초과됐습니다. 잠시 뒤 직접 다시 점검하세요.',
+          REQUEST_TIMEOUT: '서버 응답 시간이 초과됐습니다. 잠시 뒤 직접 다시 점검하세요.',
+          ENGINE_TIMEOUT: '서버 확인 시간이 초과됐습니다. 잠시 뒤 직접 다시 점검하세요.',
+          TIMEOUT: '요청 시간이 초과됐습니다. 잠시 뒤 직접 다시 점검하세요.',
+          WB_CLCO_CANCELLED: '점검이 취소됐습니다. 이전 결과는 현재 결과가 아닙니다.',
+          CANCELLED: '점검이 취소됐습니다. 이전 결과는 현재 결과가 아닙니다.',
+          REQUEST_CANCELLED: '점검이 취소됐습니다. 이전 결과는 현재 결과가 아닙니다.',
+          MODEL_NOT_CONFIGURED: '사용할 모델이 설정되지 않았습니다. 담당자에게 모델 설정을 확인하세요.',
+          ON_AI_MODEL_LIST_EMPTY: '사용할 수 있는 모델이 없습니다. 담당자에게 모델 허용 설정을 확인하세요.',
+          ON_AI_INVALID_INPUT: '점검 입력을 확인할 수 없습니다. 담당자에게 확인하세요.',
+          ON_AI_INVALID_OUTPUT: '점검 응답을 확인할 수 없습니다. 담당자에게 확인하세요.',
+          AI_REQUEST_UNVERIFIED: '연결 또는 응답을 확인할 수 없습니다. 잠시 뒤 직접 다시 점검하거나 담당자에게 확인하세요.',
+        };
+        const knownCode = Object.hasOwn(recovery, error?.code);
+        const code = knownCode ? error.code : 'AI_REQUEST_UNVERIFIED';
+        const message = knownCode && typeof error?.message === 'string' && error.message.length > 0
+          ? error.message
+          : '연결 또는 응답을 확인할 수 없습니다.';
+        addLine('p', 'AI 연결 점검 실패', 'alert');
+        addLine('p', `오류 코드: ${code}`);
+        addLine('p', `오류 내용: ${message}`);
+        addLine('p', recovery[code]);
+        addLine('p', '이 실패는 실제 사건 설명 결과가 아닙니다. 자동 재시도하지 않았습니다. 필요하면 「현재 API 연결 점검」을 직접 누르세요.');
+      } else {
+        addLine('p', '확인 불가: AI 연결 점검 상태를 확인할 수 없습니다.', 'status');
+      }
+      if (status === 'idle') addLine('p', '점검하려면 제공 화면의 「현재 API 연결 점검」을 직접 누르세요.');
+      return root;
+    },
+    renderExplanation({ event, explanation, checkedAt } = {}) {
+      const root = document.createElement('section');
+      root.setAttribute('aria-label', '선택한 보안 사건의 AI 설명');
+      const addLine = (tag, text, role) => {
+        const node = document.createElement(tag);
+        node.textContent = text;
+        if (role) node.setAttribute('role', role);
+        root.append(node);
+      };
+      const heading = document.createElement('h3');
+      heading.textContent = 'AI 사건 설명';
+      root.append(heading);
+
+      if (explanation?.status === 'idle') {
+        addLine('p', '아직 사건 설명을 요청하지 않았습니다.', 'status');
+      } else if (explanation?.status === 'loading') {
+        addLine('p', '선택한 사건의 AI 설명을 요청 중입니다.', 'status');
+      } else if (explanation?.status === 'ok') {
+        const eventId = typeof event?.id === 'string' && event.id.length > 0 ? event.id : null;
+        const summary = typeof explanation.data?.summary === 'string' ? explanation.data.summary : null;
+        if (eventId && summary !== null) {
+          root.setAttribute('data-student-explanation-event', eventId);
+          addLine('p', `사건 ID: ${eventId}`);
+          addLine('p', `AI 설명: ${summary}`);
+        } else {
+          addLine('p', '확인 불가: 사건 ID 또는 AI 설명 요약이 응답 계약과 다릅니다.', 'status');
+        }
+      } else if (explanation?.status === 'error') {
+        const code = typeof explanation.error?.code === 'string' ? explanation.error.code : 'AI_REQUEST_UNVERIFIED';
+        const message = typeof explanation.error?.message === 'string' && explanation.error.message.length > 0
+          ? explanation.error.message
+          : '안전한 오류 메시지를 확인할 수 없습니다.';
+        addLine('p', 'AI 사건 설명 요청 실패', 'alert');
+        addLine('p', `오류 코드: ${code}`);
+        addLine('p', `오류 내용: ${message}`);
+        addLine('p', '보안 기록은 변경되지 않았습니다.');
+      } else {
+        addLine('p', '확인 불가: 사건 설명 상태를 확인할 수 없습니다.', 'status');
+      }
+      return root;
+    },
     renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 원천 효과·unknown을 구분하세요.'; },
   };
 }
